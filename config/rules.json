@@ -1,0 +1,109 @@
+[
+  {
+    "rule_id": "cpu_avg_by_service_group",
+    "description": "Calculate average CPU usage by service group",
+    "source": {
+      "metric": "cpu_usage",
+      "match": {"env": "prod"}
+    },
+    "pipeline": [
+      {
+        "op": "enrich",
+        "type": "dimension",
+        "on": "labels.ip",
+        "add": "service_group"
+      },
+      {
+        "op": "groupby",
+        "labels": ["service_group"],
+        "mode": "keep_others"
+      },
+      {
+        "op": "avg",
+        "window": "5m"
+      }
+    ],
+    "enabled": true
+  },
+  {
+    "rule_id": "memory_total_by_host",
+    "description": "Calculate total memory usage by host",
+    "source": {
+      "metric": "memory_usage",
+      "match": {"env": "prod"}
+    },
+    "pipeline": [
+      {
+        "op": "groupby",
+        "labels": ["host"],
+        "mode": "keep_others"
+      },
+      {
+        "op": "sum",
+        "window": "1m"
+      }
+    ],
+    "enabled": true
+  },
+  {
+    "rule_id": "network_bytes_rate",
+    "description": "Calculate network bytes per second rate",
+    "source": {
+      "metric": "network_bytes_total",
+      "match": {"interface": "eth0"}
+    },
+    "pipeline": [
+      {
+        "op": "rate",
+        "window": "1m",
+        "type": "rate"
+      }
+    ],
+    "enabled": true
+  },
+  {
+    "rule_id": "disk_usage_delta",
+    "description": "Calculate disk usage change over 5 minutes",
+    "source": {
+      "metric": "disk_usage_bytes",
+      "match": {"env": "prod"}
+    },
+    "pipeline": [
+      {
+        "op": "delta",
+        "window": "5m"
+      }
+    ],
+    "enabled": true
+  },
+  {
+    "rule_id": "http_requests_increase",
+    "description": "Calculate increase in HTTP requests over 10 minutes",
+    "source": {
+      "metric": "http_requests_total",
+      "match": {"status": "200"}
+    },
+    "pipeline": [
+      {
+        "op": "increase",
+        "window": "10m"
+      }
+    ],
+    "enabled": true
+  },
+  {
+    "rule_id": "process_restarts_count",
+    "description": "Count process restarts (changes in uptime counter)",
+    "source": {
+      "metric": "process_uptime_seconds",
+      "match": {"env": "prod"}
+    },
+    "pipeline": [
+      {
+        "op": "changes",
+        "window": "15m"
+      }
+    ],
+    "enabled": true
+  }
+]
