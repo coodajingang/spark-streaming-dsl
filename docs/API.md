@@ -247,6 +247,7 @@ Content Script 收到后会 `loadConfig({forceReload:true})` 并重新初始化�
 
 ```json
 {
+  "id": "c0f8e3a1-0b1a-4b62-9d5a-...",
   "timestamp": "2024-01-15 14:23:45",
   "level": "INFO",
   "module": "ContentScript",

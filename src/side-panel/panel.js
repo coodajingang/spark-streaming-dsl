@@ -168,6 +168,7 @@ async function exportConfig() {
 
 async function refreshLogs() {
   await logManager.ready;
+  await logManager.reload();
 
   const level = $('log-filter-select').value;
   const logs = level ? logManager.getLogs({ level }) : logManager.getLogs();
@@ -186,6 +187,7 @@ async function refreshLogs() {
 
 async function exportLogs() {
   await logManager.ready;
+  await logManager.reload();
 
   const level = $('log-filter-select').value;
   const content = level

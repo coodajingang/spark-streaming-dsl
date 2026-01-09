@@ -140,6 +140,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'configUpdated': {
           void logger.info('收到配置更新请求');
 
+          try {
+            const config = await loadConfig({ forceReload: true });
+            logManager.setLogLevel(config.logLevel);
+            logManager.enableConsole(config.logToConsole);
+            logManager.enableStorage(config.logToStorage);
+            logManager.setMaxLogCount(config.maxLogCount);
+          } catch {
+            // ignore
+          }
+
           const tabs = await chrome.tabs.query({});
           await Promise.all(
             tabs

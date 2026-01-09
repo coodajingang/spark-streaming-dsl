@@ -64,6 +64,39 @@ function sanitize(value, seen = new WeakSet()) {
   return out;
 }
 
+function generateLogId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return uuid;
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getLogKey(log) {
+  if (!log) return '';
+  if (log.id) return String(log.id);
+  return `${log.timestamp || ''}|${log.level || ''}|${log.module || ''}|${log.message || ''}`;
+}
+
+function mergeLogs(a, b, maxCount) {
+  const out = [];
+  const seen = new Set();
+
+  for (const src of [a, b]) {
+    if (!Array.isArray(src)) continue;
+    for (const log of src) {
+      const key = getLogKey(log);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(log);
+    }
+  }
+
+  if (typeof maxCount === 'number' && maxCount > 0 && out.length > maxCount) {
+    return out.slice(-maxCount);
+  }
+
+  return out;
+}
+
 async function chromeStorageGet(key) {
   const storage = globalThis.chrome?.storage?.local;
   if (!storage) return undefined;
@@ -119,21 +152,21 @@ class LogManager {
       chromeLogs = undefined;
     }
 
-    const candidates = [];
-    if (Array.isArray(chromeLogs)) candidates.push(chromeLogs);
-    if (Array.isArray(localLogs)) candidates.push(localLogs);
+    const merged = mergeLogs(chromeLogs, localLogs, this.maxLogCount);
+    this.logs = merged;
 
-    const best = candidates.sort((a, b) => b.length - a.length)[0];
-    if (Array.isArray(best)) {
-      this.logs = best.slice(-this.maxLogCount);
-
-      if (canUseLocalStorage() && Array.isArray(chromeLogs) && best === chromeLogs) {
-        try {
-          localStorage.setItem(this.storageKey, JSON.stringify(this.logs));
-        } catch {
-          // ignore
-        }
+    if (canUseLocalStorage()) {
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(merged));
+      } catch {
+        // ignore
       }
+    }
+
+    try {
+      await chromeStorageSet(this.storageKey, merged);
+    } catch {
+      // ignore
     }
   }
 
@@ -153,20 +186,46 @@ class LogManager {
   async _persist() {
     if (!this.storageEnabled) return;
 
-    const snapshot = this.logs.slice(-this.maxLogCount);
+    const latestKey = getLogKey(this.logs[this.logs.length - 1]);
 
-    if (canUseLocalStorage()) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let stored;
       try {
-        localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+        stored = await chromeStorageGet(this.storageKey);
       } catch {
-        // ignore quota errors
+        stored = undefined;
+      }
+
+      const merged = mergeLogs(stored, this.logs, this.maxLogCount);
+      this.logs = merged;
+
+      try {
+        await chromeStorageSet(this.storageKey, merged);
+      } catch {
+        // ignore
+      }
+
+      if (!latestKey) break;
+
+      let after;
+      try {
+        after = await chromeStorageGet(this.storageKey);
+      } catch {
+        after = undefined;
+      }
+
+      if (Array.isArray(after) && after.some((l) => getLogKey(l) === latestKey)) {
+        this.logs = mergeLogs(after, this.logs, this.maxLogCount);
+        break;
       }
     }
 
-    try {
-      await chromeStorageSet(this.storageKey, snapshot);
-    } catch {
-      // ignore
+    if (canUseLocalStorage()) {
+      try {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.logs));
+      } catch {
+        // ignore quota errors
+      }
     }
   }
 
@@ -195,6 +254,7 @@ class LogManager {
     if (!this._shouldLog(level)) return;
 
     const entry = {
+      id: generateLogId(),
       timestamp: formatTimestamp(new Date()),
       level,
       module: module || 'App',
@@ -237,6 +297,11 @@ class LogManager {
       }
       return true;
     });
+  }
+
+  async reload() {
+    await this._loadFromStorage();
+    return this.logs;
   }
 
   async clearLogs() {
@@ -304,6 +369,7 @@ class LogManager {
       error: (message, data) => this.error(message, data, module),
 
       getLogs: (filter) => this.getLogs({ ...(filter || {}), module }),
+      reload: () => this.reload(),
       clearLogs: () => this.clearLogs(),
 
       setLogLevel: (level) => this.setLogLevel(level),
