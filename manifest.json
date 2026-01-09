@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Debug Logger & Config Panel (MV3)",
+  "version": "1.0.0",
+  "description": "Element detector + request interceptor + side panel with config and logs.",
+  "permissions": ["storage", "sidePanel", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Debug Panel"
+  },
+  "side_panel": {
+    "default_path": "src/side-panel/panel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
